@@ -459,9 +459,11 @@ const EVENT_CONFIG = {
     expectedBattleNameMatch: "angel",
   },
 
-  // Prize tier table. Use overlapping ranges if needed (e.g. "Top 30" alongside "#1").
+  // Prize tier table — clan-rank rows. The winning clan's Titanic variant
+  // depends on internal contributor rank; see contributorNote below.
+  // Tiers verified against /api/activeClanBattle config 2026-05-09 (AngelBattle2026).
   prizeTiers: [
-    { rankLabel: "#1",     rankMin: 1,  rankMax: 1,   prize: "Titanic Angel Cow",      pillClass: "gold"   },
+    { rankLabel: "#1",     rankMin: 1,  rankMax: 1,   prize: "Titanic Angel Cow (variant by contrib rank — see note)", pillClass: "gold"   },
     { rankLabel: "#2–3",   rankMin: 2,  rankMax: 3,   prize: "Rainbow Huge Angel Cow", pillClass: "silver" },
     { rankLabel: "#4–10",  rankMin: 4,  rankMax: 10,  prize: "Golden Huge Angel Cow",  pillClass: "silver" },
     { rankLabel: "#11–50", rankMin: 11, rankMax: 50,  prize: "Huge Angel Cow",         pillClass: "bronze" },
@@ -469,7 +471,7 @@ const EVENT_CONFIG = {
     { rankLabel: "Top 50", rankMin: 1,  rankMax: 50,  prize: "Angel Booth",            pillClass: ""       },
     { rankLabel: "Top 500",rankMin: 1,  rankMax: 500, prize: "Clan Gift #2",           pillClass: ""       },
   ],
-  contributorNote: "Every clan member gets the prize. For the Titanic: top-3 contributors get rainbow, top-10 get golden.",
+  contributorNote: "If the clan finishes #1: contributors #1–3 get Rainbow Titanic, #4–10 get Golden Titanic, #11+ get standard Titanic. For all other ranks (#2–50), every member of a qualifying clan gets the listed prize regardless of contribution rank — so personal grind volume only matters for variants inside the winning clan.",
 
   // Priority strats — ordered. First item is highest priority.
   strats: [
@@ -481,8 +483,8 @@ const EVENT_CONFIG = {
       body:  "Blizzard slows combo decay and doubles combo boost. Use it to push your streak past breakpoints (10 → 100 → 1,000) without risking timeout." },
     { title: "Drop everything for the Ultra Chest",
       body:  "20B HP server-wide chest spawns periodically. It drops coins, dice, diamonds and HUGE pets — and killing it can trigger weather. Coordinate clan to all hit it." },
-    { title: "Egg upgrades over dice spam",
-      body:  "Egg Luck and Bonus Luck (every 10 rolls) compound across your entire run. Spend coins on upgrades first, then craft dice with leftovers. Hatch Speed before luck if you can't keep up." },
+    { title: "Upgrade order: Egg Luck → Hatch Speed → Huge Luck",
+      body:  "Battle Points = rolls × hatch rarity (not roll count alone). Huge Luck (~781 RNG Coins start) is what turns rolls into points-meaningful hatches. Order: RNG Egg Luck (~257) first for compounding base luck → RNG Hatch Speed (~225) so rolls don't pile up unhatched → RNG Huge Luck for the actual scoring leverage. Bonus Luck on every 10th roll is built-in 2× — rhythm-roll in groups of 10. Skip dice crafting until upgrades are tier 3+." },
     { title: "Right-click stack your dice",
       body:  "Most dice tiers stack. Apply Lucky Dice II + Mega Lucky Dice II together right when Lightning Storm fires for compounded multipliers. Don't waste single-roll dice on dust hatches." },
     { title: "Top-3 contribution = rainbow titanic",
@@ -505,6 +507,11 @@ const EVENT_CONFIG = {
 
   // Quick reference table — short label + effect string.
   quickRef: [
+    { label: "Battle Points formula",   effect: "rolls × hatch rarity" },
+    { label: "Egg Luck (start cost)",   effect: "~257 RNG Coins" },
+    { label: "Hatch Speed (start cost)",effect: "~225 RNG Coins" },
+    { label: "Huge Luck (start cost)",  effect: "~781 RNG Coins" },
+    { label: "Bonus Luck",              effect: "2× chance every 10th roll" },
     { label: "RNG Lucky Dice",          effect: "+100% luck · 1 min" },
     { label: "RNG Lucky Dice II",       effect: "+150% luck · 5 min" },
     { label: "RNG Mega Lucky Dice",     effect: "+1,000,000% · 1 roll" },
@@ -550,6 +557,7 @@ const EVENT_CONFIG = {
   },
 
   pitfalls: [
+    "<b>Roll-spam without Huge Luck unlocked</b> — points scale with hatch rarity, not roll count. Dust hatches feed RNG Coins, not Battle Points. Get Huge Luck unlocked before going volume.",
     "<b>Mega Lucky Dice II outside Lightning Storm</b> — you're throwing away ~3× value. Wait for the storm.",
     "<b>Letting combo decay reset</b> — even a 30s walk-away tanks your luck floor. Roll on autopilot during chores.",
     "<b>Solo grinding the Ultra Chest</b> — coordinate clan in voice/discord, kills come faster, weather triggers help everyone.",
@@ -993,11 +1001,14 @@ async function apiGet(path) {
 
     try {
       const bd = await apiGet("activeClanBattle");
+      // Tolerate both nested (bd.configData.FinishTime) and flat
+      // (bd.FinishTime) shapes — the API has shifted these in past updates.
+      const cd = bd.configData || {};
       liveBattle = {
-        configName: bd.configName,
-        title: (bd.configData && bd.configData.Title) || bd.configName,
-        startTime: bd.configData && bd.configData.StartTime,
-        finishTime: bd.configData && bd.configData.FinishTime,
+        configName: bd.configName || bd.ConfigName || cd.ConfigName,
+        title: cd.Title || bd.Title || bd.configName || bd.ConfigName,
+        startTime: cd.StartTime || bd.StartTime,
+        finishTime: cd.FinishTime || bd.FinishTime,
       };
       okBattle = true;
     } catch (e) { /* keep snapshot */ }
