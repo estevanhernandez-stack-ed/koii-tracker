@@ -566,24 +566,61 @@ async function apiGet(path) {
   return j.data;
 }
 
-// Resolve a list of Roblox UserIDs to display names via the public users API
-// (CORS-open, no auth). Returns a map { userId → name }. Capped at 100 IDs
-// per call (Roblox limit). Failure → empty map; the renderer falls back to
-// "user-<id>" so the UI never breaks on a Roblox-side outage.
+// Resolve a list of Roblox UserIDs to display names. Multi-strategy because
+// Roblox's CORS posture varies by endpoint and over time:
+//   1. POST /v1/users — batch request, single round-trip, but POST+JSON
+//      triggers a CORS preflight that the endpoint sometimes rejects.
+//   2. GET /v1/users/<id> — per-user, parallel. Simple request (no
+//      preflight), most likely to work from a static-HTML origin.
+// Returns a map { userId → name }. Capped at 100 IDs (Roblox batch limit).
+// Failure on every strategy → empty map; renderer falls back to "user-<id>"
+// so the UI never breaks. Diagnostics go to console for devtools visibility.
 async function resolveRobloxUsernames(userIds) {
   if (!userIds || !userIds.length) return {};
+  const ids = userIds.slice(0, 100);
+  const map = {};
+
+  // Strategy 1 — batch POST.
   try {
     const r = await fetch("https://users.roblox.com/v1/users", {
       method: "POST",
       headers: { "Content-Type": "application/json", "Accept": "application/json" },
-      body: JSON.stringify({ userIds: userIds.slice(0, 100), excludeBannedUsers: false }),
+      body: JSON.stringify({ userIds: ids, excludeBannedUsers: false }),
     });
-    if (!r.ok) return {};
-    const j = await r.json();
-    const map = {};
-    (j.data || []).forEach(u => { if (u && u.id) map[u.id] = u.name || u.displayName || ""; });
-    return map;
-  } catch { return {}; }
+    if (r.ok) {
+      const j = await r.json();
+      (j.data || []).forEach(u => { if (u && u.id) map[u.id] = u.name || u.displayName || ""; });
+      if (Object.keys(map).length === ids.length) {
+        console.info("Roblox username resolve: batch POST →", Object.keys(map).length + "/" + ids.length);
+        return map;
+      }
+    } else {
+      console.warn("Roblox batch POST returned HTTP", r.status);
+    }
+  } catch (e) {
+    console.warn("Roblox batch POST blocked (likely CORS preflight):", (e && e.message) || e);
+  }
+
+  // Strategy 2 — per-user GET in parallel. No custom headers → no preflight.
+  const missing = ids.filter(id => !map[id]);
+  if (missing.length === 0) return map;
+  try {
+    const settled = await Promise.allSettled(
+      missing.map(id =>
+        fetch("https://users.roblox.com/v1/users/" + id)
+          .then(r => r.ok ? r.json() : null)
+      )
+    );
+    settled.forEach(s => {
+      if (s.status === "fulfilled" && s.value && s.value.id) {
+        map[s.value.id] = s.value.name || s.value.displayName || "";
+      }
+    });
+    console.info("Roblox username resolve: per-user GET →", Object.keys(map).length + "/" + ids.length);
+  } catch (e) {
+    console.warn("Roblox per-user GET also failed:", (e && e.message) || e);
+  }
+  return map;
 }
 
 // =============================================================================
