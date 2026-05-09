@@ -4,6 +4,8 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Koii Tracker</title>
+<link rel="icon" type="image/png" href="favicon.png" />
+<link rel="apple-touch-icon" href="favicon.png" />
 <script>
   // FOUC guard — apply persisted theme before stylesheets paint.
   (function () {
@@ -564,6 +566,26 @@ async function apiGet(path) {
   return j.data;
 }
 
+// Resolve a list of Roblox UserIDs to display names via the public users API
+// (CORS-open, no auth). Returns a map { userId → name }. Capped at 100 IDs
+// per call (Roblox limit). Failure → empty map; the renderer falls back to
+// "user-<id>" so the UI never breaks on a Roblox-side outage.
+async function resolveRobloxUsernames(userIds) {
+  if (!userIds || !userIds.length) return {};
+  try {
+    const r = await fetch("https://users.roblox.com/v1/users", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify({ userIds: userIds.slice(0, 100), excludeBannedUsers: false }),
+    });
+    if (!r.ok) return {};
+    const j = await r.json();
+    const map = {};
+    (j.data || []).forEach(u => { if (u && u.id) map[u.id] = u.name || u.displayName || ""; });
+    return map;
+  } catch { return {}; }
+}
+
 // =============================================================================
 // App
 // =============================================================================
@@ -883,28 +905,51 @@ async function apiGet(path) {
       const pointsRank = pointsIdx >= 0 ? "#" + (pointsIdx+1) + " (top 20 view)" : "outside top 20";
       const ddRank     = ddIdx >= 0 ? "#" + (ddIdx+1) : "—";
 
-      // The BIG Games API has shifted this field's shape across updates.
-      // Try every documented and observed path, then normalize to
-      // [{UserID, Points}, …]. If still empty, log the response keys to
-      // the console so we can see what shape the API used this run.
-      let contribRaw =
-        (live.Contribution && live.Contribution.Battle) ||
-        (live.Battle && live.Battle.Contribution) ||
-        (live.Battle && live.Battle.Contributions) ||
-        live.Contributions ||
-        live.MemberPoints ||
-        live.BattlePoints ||
-        live.MemberContributions ||
-        [];
-      // Object-map shape: { "<UserID>": <Points>, … } → array.
-      if (contribRaw && !Array.isArray(contribRaw) && typeof contribRaw === "object") {
-        contribRaw = Object.entries(contribRaw).map(([UserID, v]) => ({
-          UserID,
-          Points: typeof v === "number" ? v : (v && v.Points) || 0,
-        }));
+      // Per-member contribution rows for the active battle.
+      // Live shape (verified 2026-05-09): data.Battles is a dict keyed by
+      // battle name; e.g., live.Battles["AngelBattle2026"].PointContributions
+      // is an array of { UserID, Points }. The active battle name comes from
+      // /api/activeClanBattle (we cache it as liveBattle.configName above).
+      // Falls back to the Battles entry with the highest BattleID + non-empty
+      // PointContributions if the direct join misses (e.g., active battle
+      // hasn't logged this clan's points yet, or configName mismatch).
+      let contribRows = [];
+      let activeBattleKey = null;
+      if (live.Battles && typeof live.Battles === "object") {
+        const targetKey = liveBattle && liveBattle.configName;
+        if (targetKey && live.Battles[targetKey] && Array.isArray(live.Battles[targetKey].PointContributions)) {
+          activeBattleKey = targetKey;
+          contribRows = live.Battles[targetKey].PointContributions;
+        }
+        if (contribRows.length === 0) {
+          let bestKey = null, bestId = -1, bestRows = [];
+          for (const [k, v] of Object.entries(live.Battles)) {
+            const rows = (v && Array.isArray(v.PointContributions)) ? v.PointContributions : [];
+            const id = (v && typeof v.BattleID === "number") ? v.BattleID : 0;
+            if (rows.length > 0 && id > bestId) { bestId = id; bestKey = k; bestRows = rows; }
+          }
+          if (bestRows.length > 0) { activeBattleKey = bestKey; contribRows = bestRows; }
+        }
       }
-      const contribRows = Array.isArray(contribRaw) ? contribRaw : [];
+      // Legacy paths — kept as belt-and-suspenders for response-shape drift.
+      if (contribRows.length === 0) {
+        let contribRaw =
+          (live.Contribution && live.Contribution.Battle) ||
+          (live.Battle && live.Battle.Contribution) ||
+          live.Contributions ||
+          live.MemberPoints ||
+          [];
+        if (contribRaw && !Array.isArray(contribRaw) && typeof contribRaw === "object") {
+          contribRaw = Object.entries(contribRaw).map(([UserID, v]) => ({
+            UserID, Points: typeof v === "number" ? v : (v && v.Points) || 0,
+          }));
+        }
+        if (Array.isArray(contribRaw)) contribRows = contribRaw;
+      }
       const contribSorted = contribRows.slice().sort((a,b) => (b.Points||0) - (a.Points||0));
+      // Resolve UserIDs to Roblox usernames for the top 10 (the rendered slice).
+      const topIds = contribSorted.slice(0, 10).map(r => Number(r.UserID)).filter(n => Number.isFinite(n) && n > 0);
+      const userNames = await resolveRobloxUsernames(topIds);
       let contribHtml;
       if (contribSorted.length === 0) {
         // Surface the actual response shape for debugging — only fires
@@ -922,11 +967,19 @@ async function apiGet(path) {
             '</a>' +
           '</div>';
       } else {
-        contribHtml = '<table style="margin-top:8px;"><thead><tr><th class="right">#</th><th>UserID</th><th class="right">Points</th></tr></thead><tbody>'
+        const battleLabel = activeBattleKey ? ' (' + escapeHtml(activeBattleKey) + ')' : '';
+        contribHtml = '<div class="sub" style="margin-top:8px; margin-bottom:4px;">Live from BIG Games API' + battleLabel + ' · ' + contribRows.length + ' contributors total</div>'
+          + '<table><thead><tr><th class="right">#</th><th>Member</th><th class="right">Points</th></tr></thead><tbody>'
           + contribSorted.slice(0,10).map((r,i) => {
               const cls = i===0 ? 'pill gold' : (i<3 ? 'pill silver' : (i<10 ? 'pill bronze' : 'pill'));
-              const lbl = i===0 ? 'Rainbow' : (i<3 ? 'Rainbow' : (i<10 ? 'Golden' : 'Std'));
-              return '<tr><td class="right rank">'+(i+1)+'</td><td>'+r.UserID+'</td><td class="right">'+fmtNum(r.Points)+' <span class="'+cls+'">'+lbl+'</span></td></tr>';
+              const lbl = i<3 ? 'Rainbow' : (i<10 ? 'Golden' : 'Std');
+              const uid = Number(r.UserID);
+              const nameRaw = (Number.isFinite(uid) && userNames[uid]) || ('user-' + r.UserID);
+              const profileUrl = Number.isFinite(uid) ? ('https://www.roblox.com/users/' + uid + '/profile') : null;
+              const nameCell = profileUrl
+                ? '<a href="' + profileUrl + '" target="_blank" rel="noopener" style="color: var(--accent); text-decoration: none;">' + escapeHtml(nameRaw) + '</a>'
+                : escapeHtml(nameRaw);
+              return '<tr><td class="right rank">'+(i+1)+'</td><td>'+nameCell+'</td><td class="right">'+fmtNum(r.Points)+' <span class="'+cls+'">'+lbl+'</span></td></tr>';
             }).join("")
           + '</tbody></table>';
       }
