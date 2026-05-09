@@ -602,24 +602,55 @@ async function resolveRobloxUsernames(userIds) {
   }
 
   // Strategy 2 — per-user GET in parallel. No custom headers → no preflight.
-  const missing = ids.filter(id => !map[id]);
-  if (missing.length === 0) return map;
-  try {
-    const settled = await Promise.allSettled(
-      missing.map(id =>
-        fetch("https://users.roblox.com/v1/users/" + id)
-          .then(r => r.ok ? r.json() : null)
-      )
-    );
-    settled.forEach(s => {
-      if (s.status === "fulfilled" && s.value && s.value.id) {
-        map[s.value.id] = s.value.name || s.value.displayName || "";
+  let missing = ids.filter(id => !map[id]);
+  if (missing.length > 0) {
+    try {
+      const settled = await Promise.allSettled(
+        missing.map(id =>
+          fetch("https://users.roblox.com/v1/users/" + id)
+            .then(r => r.ok ? r.json() : null)
+        )
+      );
+      settled.forEach(s => {
+        if (s.status === "fulfilled" && s.value && s.value.id) {
+          map[s.value.id] = s.value.name || s.value.displayName || "";
+        }
+      });
+      if (Object.keys(map).length > 0) {
+        console.info("Roblox username resolve: direct per-user GET →", Object.keys(map).length + "/" + ids.length);
       }
-    });
-    console.info("Roblox username resolve: per-user GET →", Object.keys(map).length + "/" + ids.length);
-  } catch (e) {
-    console.warn("Roblox per-user GET also failed:", (e && e.message) || e);
+    } catch (e) {
+      console.warn("Roblox per-user GET also failed:", (e && e.message) || e);
+    }
   }
+
+  // Strategy 3 — public CORS proxy fallback. Roblox locks CORS down for
+  // non-Roblox origins entirely (verified empirically: even *.github.io is
+  // rejected). Community trackers resolve names server-side; we don't have
+  // a backend, so corsproxy.io fronts the request and adds the Access-
+  // Control-Allow-Origin: * header to the response. Only sending public
+  // Roblox UserIDs which are already public info, so privacy cost is zero.
+  missing = ids.filter(id => !map[id]);
+  if (missing.length > 0) {
+    try {
+      const proxyUrl = "https://corsproxy.io/?" + encodeURIComponent("https://users.roblox.com/v1/users");
+      const r = await fetch(proxyUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        body: JSON.stringify({ userIds: missing, excludeBannedUsers: false }),
+      });
+      if (r.ok) {
+        const j = await r.json();
+        (j.data || []).forEach(u => { if (u && u.id) map[u.id] = u.name || u.displayName || ""; });
+        console.info("Roblox username resolve: via corsproxy.io →", Object.keys(map).length + "/" + ids.length);
+      } else {
+        console.warn("corsproxy.io batch POST returned HTTP", r.status);
+      }
+    } catch (e) {
+      console.warn("corsproxy.io fallback also failed:", (e && e.message) || e);
+    }
+  }
+
   return map;
 }
 
