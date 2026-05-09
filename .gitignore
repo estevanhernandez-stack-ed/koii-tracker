@@ -12,3 +12,8 @@ desktop.ini
 # Logs / scratch
 *.log
 .tmp/
+
+# Raw screenshots dropped into the project (the working files behind
+# committed assets like favicon.png — keep local, don't ship)
+Screenshot*.png
+Screenshot*.jpg
