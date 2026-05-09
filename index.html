@@ -900,11 +900,34 @@ async function apiGet(path) {
       const pointsRank = pointsIdx >= 0 ? "#" + (pointsIdx+1) + " (top 20 view)" : "outside top 20";
       const ddRank     = ddIdx >= 0 ? "#" + (ddIdx+1) : "—";
 
-      const contribRows = (live.Contribution && live.Contribution.Battle) || [];
+      // The BIG Games API has shifted this field's shape across updates.
+      // Try every documented and observed path, then normalize to
+      // [{UserID, Points}, …]. If still empty, log the response keys to
+      // the console so we can see what shape the API used this run.
+      let contribRaw =
+        (live.Contribution && live.Contribution.Battle) ||
+        (live.Battle && live.Battle.Contribution) ||
+        (live.Battle && live.Battle.Contributions) ||
+        live.Contributions ||
+        live.MemberPoints ||
+        live.BattlePoints ||
+        live.MemberContributions ||
+        [];
+      // Object-map shape: { "<UserID>": <Points>, … } → array.
+      if (contribRaw && !Array.isArray(contribRaw) && typeof contribRaw === "object") {
+        contribRaw = Object.entries(contribRaw).map(([UserID, v]) => ({
+          UserID,
+          Points: typeof v === "number" ? v : (v && v.Points) || 0,
+        }));
+      }
+      const contribRows = Array.isArray(contribRaw) ? contribRaw : [];
       const contribSorted = contribRows.slice().sort((a,b) => (b.Points||0) - (a.Points||0));
       let contribHtml;
       if (contribSorted.length === 0) {
-        contribHtml = '<div class="sub" style="margin-top:8px;">No active contribution data — battle not running for this clan yet.</div>';
+        // Surface the actual response shape for debugging — only fires
+        // when contribution data is missing so it doesn't spam the console.
+        try { console.warn("Koii Tracker: no contribution rows for", live.Name, "— top-level keys:", Object.keys(live)); } catch {}
+        contribHtml = '<div class="sub" style="margin-top:8px;">No active contribution data — either the battle just turned over and points haven\'t logged, or the API field path moved. Open devtools console for response keys.</div>';
       } else {
         contribHtml = '<table style="margin-top:8px;"><thead><tr><th class="right">#</th><th>UserID</th><th class="right">Points</th></tr></thead><tbody>'
           + contribSorted.slice(0,10).map((r,i) => {
