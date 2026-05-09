@@ -1,0 +1,944 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Koii Tracker</title>
+<style>
+  :root {
+    color-scheme: light;
+    /* Default Koii palette — override via EVENT_CONFIG.brand if you want */
+    --bg: #fff7ef;
+    --panel: #ffffff;
+    --panel-2: #fff0e2;
+    --ink: #2a1a10;
+    --ink-soft: #6a564a;
+    --line: #f3dfc8;
+    --accent: #ff6b35;
+    --accent-2: #ffa172;
+    --gold: #d9a514;
+    --silver: #8a96aa;
+    --bronze: #b56a2e;
+    --good: #1a8c4a;
+    --warn: #c0470e;
+    --hot: #c12d52;
+    --shadow: 0 1px 2px rgba(42,26,16,.06), 0 6px 24px rgba(255,107,53,.10);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); }
+  body {
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+    padding: 20px 22px 56px;
+    max-width: 1180px;
+    margin: 0 auto;
+  }
+  h1 { margin: 0 0 4px; font-size: 22px; letter-spacing: -0.01em; }
+  h2 { font-size: 15px; margin: 0 0 10px; letter-spacing: 0.02em; text-transform: uppercase; color: var(--ink-soft); }
+  h3 { font-size: 13px; margin: 0 0 6px; color: var(--ink); }
+  .sub { color: var(--ink-soft); font-size: 13px; margin-bottom: 18px; }
+  code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+  .grid { display: grid; gap: 14px; }
+  .grid.cols-2 { grid-template-columns: 1fr 1fr; }
+  .grid.cols-3 { grid-template-columns: 2fr 1fr 1fr; }
+  @media (max-width: 880px) { .grid.cols-2, .grid.cols-3 { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; padding: 16px 18px;
+    box-shadow: var(--shadow);
+  }
+  .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--panel-2); color: var(--ink); border: 1px solid var(--line);
+    padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 500;
+  }
+  .pill.accent { background: var(--accent); color: white; border-color: var(--accent); }
+  .pill.gold   { background: #fff3cf; color: #6a4a08; border-color: #f0d986; }
+  .pill.silver { background: #eef2f8; color: #2c3a52; border-color: #d6dde9; }
+  .pill.bronze { background: #f5e6d4; color: #5e3411; border-color: #e0c4a3; }
+  .pill.good   { background: #e1f3e8; color: #0f5e30; border-color: #b9e0c8; }
+  .pill.hot    { background: #fce5ec; color: #82203e; border-color: #f4bdcc; }
+  .pill.warn   { background: #fff4e2; color: #6f3a06; border-color: #f3d6a0; }
+  .clock {
+    font-variant-numeric: tabular-nums;
+    font-size: 28px; font-weight: 700; letter-spacing: -0.01em; color: var(--accent);
+  }
+  .clock small { font-weight: 500; font-size: 12px; color: var(--ink-soft); margin-left: 4px; }
+  .strats { padding: 0; margin: 0; list-style: none; counter-reset: s; }
+  .strats > li {
+    display: grid; grid-template-columns: 28px 1fr; gap: 10px;
+    padding: 10px 0; border-top: 1px dashed var(--line);
+  }
+  .strats > li:first-child { border-top: none; padding-top: 4px; }
+  .strats > li::before {
+    counter-increment: s; content: counter(s);
+    width: 26px; height: 26px; border-radius: 8px;
+    background: var(--accent); color: white; font-weight: 700;
+    display: grid; place-items: center; font-size: 12px;
+  }
+  .strats h3 { margin-bottom: 2px; }
+  .strats p { margin: 0; color: var(--ink-soft); font-size: 13px; }
+  .check {
+    display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px;
+    border-radius: 10px; cursor: pointer; user-select: none;
+    border: 1px solid transparent;
+  }
+  .check:hover { background: var(--panel-2); }
+  .check input { margin-top: 3px; flex-shrink: 0; accent-color: var(--accent); }
+  .check.done .label { color: var(--ink-soft); text-decoration: line-through; }
+  .check .label { font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; color: var(--ink-soft); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; background: var(--panel-2); position: sticky; top: 0; }
+  tr:last-child td { border-bottom: none; }
+  td.right, th.right { text-align: right; font-variant-numeric: tabular-nums; }
+  td.rank { width: 44px; font-weight: 700; color: var(--accent); }
+  tr.me td { background: #fff7d6; }
+  .scroll { max-height: 480px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; }
+  .input-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .input-row label { font-size: 12px; color: var(--ink-soft); }
+  input[type="number"], input[type="text"] {
+    background: var(--panel-2); border: 1px solid var(--line); color: var(--ink);
+    border-radius: 8px; padding: 6px 10px; font: inherit;
+    width: 130px; text-align: right;
+  }
+  input[type="text"] { text-align: left; width: 200px; }
+  input:focus { outline: 2px solid var(--accent-2); outline-offset: 1px; }
+  button.primary {
+    background: var(--accent); color: white; border: none;
+    padding: 6px 14px; border-radius: 8px; font: inherit; cursor: pointer;
+  }
+  button.primary:hover { filter: brightness(0.93); }
+  button.primary:disabled { opacity: 0.5; cursor: wait; }
+  .stat { font-size: 22px; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+  .stat small { display: block; font-size: 11px; font-weight: 500; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.05em; }
+  .stat-row { display: flex; gap: 20px; flex-wrap: wrap; }
+  .danger { background: #fff4f0; border-color: #f5cbb5; }
+  .danger h2 { color: var(--warn); }
+  .reset {
+    background: transparent; border: 1px solid var(--line); color: var(--ink-soft);
+    padding: 4px 10px; font-size: 12px; border-radius: 8px; cursor: pointer;
+  }
+  .reset:hover { background: var(--panel-2); color: var(--ink); }
+  .footer { margin-top: 24px; color: var(--ink-soft); font-size: 12px; text-align: center; }
+  .footer a { color: var(--accent); }
+  .matrix-card {
+    background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 10px; padding: 10px 12px;
+  }
+  .matrix-card .when { font-size: 12px; color: var(--accent); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+  .matrix-card .what { font-size: 13px; margin-top: 4px; }
+  .day-tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 12px; }
+  .day-tab {
+    padding: 4px 10px; border-radius: 8px; cursor: pointer;
+    background: var(--panel-2); border: 1px solid var(--line); font-size: 12px;
+  }
+  .day-tab.active { background: var(--accent); color: white; border-color: var(--accent); }
+  .hidden { display: none; }
+  .banner {
+    display: flex; gap: 12px; align-items: center; justify-content: space-between;
+    padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line);
+    background: var(--panel-2); flex-wrap: wrap;
+  }
+  .banner.live { background: #e1f3e8; border-color: #b9e0c8; }
+  .banner.warn { background: #fff4e2; border-color: #f3d6a0; }
+  .banner.dim  { background: var(--panel-2); }
+  .banner .title { font-weight: 700; font-size: 14px; }
+  .banner .meta  { color: var(--ink-soft); font-size: 12px; }
+  .seg-toggle { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg-toggle button {
+    background: white; border: none; color: var(--ink-soft); cursor: pointer;
+    padding: 5px 10px; font: inherit; font-size: 12px;
+  }
+  .seg-toggle button.active { background: var(--accent); color: white; }
+  .seg-toggle button + button { border-left: 1px solid var(--line); }
+  .source-tag { font-size: 11px; color: var(--ink-soft); margin-left: 6px; }
+  .empty { color: var(--ink-soft); font-size: 13px; padding: 14px; text-align: center; }
+  .country { font-variant-emoji: emoji; font-size: 14px; margin-right: 4px; }
+  .brand-mark {
+    display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 8px;
+    background: var(--accent); color: white; font-weight: 800; margin-right: 8px;
+    box-shadow: 0 2px 6px rgba(255,107,53,.35);
+  }
+</style>
+</head>
+<body>
+  <header style="display: flex; align-items: center; gap: 4px; margin-bottom: 14px;">
+    <span class="brand-mark" id="brand-mark">K</span>
+    <div>
+      <h1 id="title">Koii Tracker</h1>
+      <div class="sub" id="subtitle" style="margin: 0;">Pet Sim 99 event strategy + clan standings</div>
+    </div>
+  </header>
+
+  <!-- LIVE STATUS BANNER -->
+  <section class="panel" style="margin-bottom: 14px;">
+    <div id="banner" class="banner dim">
+      <div>
+        <div class="title" id="banner-title">Loading event…</div>
+        <div class="meta"  id="banner-meta">Pulling from BIG Games API</div>
+      </div>
+      <div class="row">
+        <span class="source-tag" id="data-stamp">no data yet</span>
+        <button class="primary" id="refresh-btn">Refresh live</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- LIVE LEADERBOARD + YOUR CLAN -->
+  <section class="grid cols-2" style="margin-bottom: 14px;">
+    <div class="panel">
+      <div class="row" style="justify-content: space-between; margin-bottom: 8px;">
+        <h2 style="margin: 0;">Top 20 clans</h2>
+        <div class="seg-toggle" id="lb-mode">
+          <button data-mode="Points" class="active">Battle Points</button>
+          <button data-mode="DepositedDiamonds">Lifetime Diamonds</button>
+        </div>
+      </div>
+      <div class="scroll">
+        <table>
+          <thead><tr><th class="right">#</th><th>Clan</th><th class="right">Score</th><th class="right">Members</th></tr></thead>
+          <tbody id="lb-body"><tr><td colspan="4" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="sub" id="lb-footnote" style="margin: 8px 0 0;"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Your clan</h2>
+      <div class="row" id="myclan-pills" style="margin-bottom: 8px; gap: 6px;"></div>
+      <div class="input-row">
+        <label for="clan-name">Or look up any clan (case-insensitive)</label>
+        <div class="row" style="gap: 6px;">
+          <input id="clan-name" type="text" placeholder="e.g. K0i2" list="clan-list" autocomplete="off" />
+          <datalist id="clan-list"></datalist>
+          <button class="primary" id="clan-fetch">Look up</button>
+        </div>
+      </div>
+      <div id="clan-card" class="empty">Click your clan above or type any clan name.</div>
+    </div>
+  </section>
+
+  <!-- PRIORITY STRATS + DAILY CHECKLIST -->
+  <section class="grid cols-2" style="margin-bottom: 14px;">
+    <div class="panel">
+      <h2 id="strats-heading">Priority strat — what wins</h2>
+      <ol class="strats" id="strats-list"></ol>
+    </div>
+
+    <div class="panel">
+      <h2>Daily checklist</h2>
+      <div class="day-tabs" id="day-tabs"></div>
+      <div id="day-panels"></div>
+      <div class="row" style="margin-top: 8px; justify-content: flex-end;">
+        <button class="reset" id="reset-checks">Reset all checks</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- DICE MATRIX + QUICK REF -->
+  <section class="grid cols-2" style="margin-bottom: 14px;">
+    <div class="panel">
+      <h2 id="matrix-heading">Decision matrix</h2>
+      <div class="grid" id="matrix-list" style="gap: 8px;"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Quick reference</h2>
+      <table>
+        <thead><tr><th>Item</th><th class="right">Effect</th></tr></thead>
+        <tbody id="quickref-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- PRIZE TIERS + PERSONAL STATS -->
+  <section class="grid cols-2" style="margin-bottom: 14px;">
+    <div class="panel">
+      <h2>Clan prize tiers</h2>
+      <table>
+        <thead><tr><th>Rank</th><th>Prize</th><th>Medal</th></tr></thead>
+        <tbody id="prizes-body"></tbody>
+      </table>
+      <p class="sub" id="contributor-note" style="margin: 10px 0 0;"></p>
+    </div>
+
+    <div class="panel">
+      <h2>Personal grind log</h2>
+      <div class="stat-row" style="margin-bottom: 14px;">
+        <div class="stat" id="stat-rolls">0<small>Total rolls</small></div>
+        <div class="stat" id="stat-combo">0<small>Best combo</small></div>
+      </div>
+      <div class="input-row">
+        <label for="in-rolls">Total rolls (this event)</label>
+        <input id="in-rolls" type="number" min="0" step="1" />
+      </div>
+      <div class="input-row">
+        <label for="in-combo">Best combo streak</label>
+        <input id="in-combo" type="number" min="0" step="1" />
+      </div>
+      <div class="row" style="justify-content: flex-end; margin-top: 6px;">
+        <button class="reset" id="reset-stats">Reset stats</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- PITFALLS -->
+  <section class="panel danger" style="margin-bottom: 14px;">
+    <h2>Don't waste these</h2>
+    <ul id="pitfalls-list" style="margin: 0; padding-left: 18px;"></ul>
+  </section>
+
+  <div class="footer" id="footer"></div>
+
+<script>
+// =============================================================================
+// EVENT_CONFIG — Edit this block to adapt the tracker for a new BIG Games event.
+//
+// To use for a future event:
+//   1. Update `event` (id, title, source URL, start/end dates, expected battle name)
+//   2. Update `prizeTiers` to match the new battle's prize structure
+//   3. Update `strats[]` with event-specific tactics (ordered by priority)
+//   4. Update `decisionMatrix[]` with event-specific tactical when/what cards
+//   5. Update `quickRef[]` with the event's mechanics, drop rates, breakpoints
+//   6. Update `checklist.days[]` with the event flow per day
+//   7. Update `pitfalls[]` with the common mistakes for this event
+//   8. Optional: update `brand` colors/title if rebranding for a different clan
+//
+// Save and refresh — done. The 100-clan snapshot at the bottom of this file
+// is a separate concern (regenerate every few months from the BIG Games API).
+// =============================================================================
+const EVENT_CONFIG = {
+  brand: {
+    title: "Koii Tracker",
+    subtitle: "Pet Sim 99 event strategy + clan standings",
+    initial: "K",                 // shown in the brand mark badge
+    accent:  "#ff6b35",           // primary color
+    accent2: "#ffa172",            // accent for focus rings, glow
+    bg:      "#fff7ef",            // page background
+    panelTint: "#fff0e2",          // soft secondary background
+  },
+
+  // Clans you want to track. The first item is the default selection on load.
+  // Add more as quick-switch pills appear above the lookup. Set `note` to
+  // remind yourself of context (e.g. "backup", "alt").
+  myClans: [
+    { name: "K0i2", label: "K0i2", note: "backup · all of us currently here" },
+    // Add the original clan back here if/when the missing mod returns:
+    // { name: "OriginalClan", label: "OriginalClan", note: "primary" },
+  ],
+
+  event: {
+    id: "void-rng-angel-2026-05",
+    title: "Void RNG — Angel Clan Battle",
+    updateNumber: 78,
+    sourceUrl: "https://www.biggames.io/post/pet-simulator-99-update-78",
+    // ISO timestamps. Update 78 launched May 9, 2026; battle runs 7 days.
+    startDate: "2026-05-09T00:00:00Z",
+    endDate:   "2026-05-16T23:59:59Z",
+    // Substring matched (case-insensitive) against API's battle configName / Title.
+    // When the API returns a battle whose name contains this, banner flips to LIVE.
+    expectedBattleNameMatch: "angel",
+  },
+
+  // Prize tier table. Use overlapping ranges if needed (e.g. "Top 30" alongside "#1").
+  prizeTiers: [
+    { rankLabel: "#1",     rankMin: 1,  rankMax: 1,   prize: "Titanic Angel Cow",      pillClass: "gold"   },
+    { rankLabel: "#2–3",   rankMin: 2,  rankMax: 3,   prize: "Rainbow Huge Angel Cow", pillClass: "silver" },
+    { rankLabel: "#4–10",  rankMin: 4,  rankMax: 10,  prize: "Golden Huge Angel Cow",  pillClass: "silver" },
+    { rankLabel: "#11–50", rankMin: 11, rankMax: 50,  prize: "Huge Angel Cow",         pillClass: "bronze" },
+    { rankLabel: "Top 30", rankMin: 1,  rankMax: 30,  prize: "Angel Hoverboard",       pillClass: ""       },
+    { rankLabel: "Top 50", rankMin: 1,  rankMax: 50,  prize: "Angel Booth",            pillClass: ""       },
+    { rankLabel: "Top 500",rankMin: 1,  rankMax: 500, prize: "Clan Gift #2",           pillClass: ""       },
+  ],
+  contributorNote: "Every clan member gets the prize. For the Titanic: top-3 contributors get rainbow, top-10 get golden.",
+
+  // Priority strats — ordered. First item is highest priority.
+  strats: [
+    { title: "Stack combo streaks past 1,000",
+      body:  "Roll fast, never stop. Each roll adds luck to the next; pause and it resets to zero. The 1,000+ tier is where the curve bites — that's where huge / titanic odds become real." },
+    { title: "Hoard dice for Lightning Storms",
+      body:  "Lightning Storm = 3× luck server-wide for 2 minutes. That's when you burn Mega Lucky Dice II (+10,000,000% luck, 1 roll). Outside of weather they're wasted — save them." },
+    { title: "Blizzard = combo grind window",
+      body:  "Blizzard slows combo decay and doubles combo boost. Use it to push your streak past breakpoints (10 → 100 → 1,000) without risking timeout." },
+    { title: "Drop everything for the Ultra Chest",
+      body:  "20B HP server-wide chest spawns periodically. It drops coins, dice, diamonds and HUGE pets — and killing it can trigger weather. Coordinate clan to all hit it." },
+    { title: "Egg upgrades over dice spam",
+      body:  "Egg Luck and Bonus Luck (every 10 rolls) compound across your entire run. Spend coins on upgrades first, then craft dice with leftovers. Hatch Speed before luck if you can't keep up." },
+    { title: "Right-click stack your dice",
+      body:  "Most dice tiers stack. Apply Lucky Dice II + Mega Lucky Dice II together right when Lightning Storm fires for compounded multipliers. Don't waste single-roll dice on dust hatches." },
+    { title: "Top-3 contribution = rainbow titanic",
+      body:  "Even if your clan finishes #1, only top-3 contributors get rainbow Titanic Angel Cow; top-10 get gold. Personal volume matters as much as clan rank — stay rolling." },
+  ],
+
+  // When-do-I-do-X tactical cards.
+  decisionMatrix: [
+    { when: "During Lightning Storm (3× luck, 2min)",
+      what: "Burn <b>Mega Lucky Dice II</b> (+10,000,000%) — combos with the storm. Stack <b>Lucky Dice II</b> underneath for the duration." },
+    { when: "During Blizzard (combo decay slow)",
+      what: "Push <b>combo streak</b> past breakpoints. Use <b>Lucky Dice II</b> (+150%, 5min) for a sustained boost — Mega dice are wasted here." },
+    { when: "No weather, normal grind",
+      what: "Spend coins on <b>Egg Luck</b> + <b>Bonus Luck</b> upgrades. Run free combo. Save Mega tier dice for storms." },
+    { when: "Combo streak ≥ 1,000",
+      what: "Pop <b>Mega Lucky Dice</b> (+1M%, 1 roll) — your streak luck × dice luck × upgrades = highest titanic shot you'll get." },
+    { when: "Spare pets piling up",
+      what: "Sell at <b>Pet Merchant</b> for RNG Coins (rates aren't great, but feeds upgrades). Or fuse spares at <b>Dice Crafting</b> for higher-tier dice." },
+  ],
+
+  // Quick reference table — short label + effect string.
+  quickRef: [
+    { label: "RNG Lucky Dice",          effect: "+100% luck · 1 min" },
+    { label: "RNG Lucky Dice II",       effect: "+150% luck · 5 min" },
+    { label: "RNG Mega Lucky Dice",     effect: "+1,000,000% · 1 roll" },
+    { label: "RNG Mega Lucky Dice II",  effect: "+10,000,000% · 1 roll" },
+    { label: "Lightning Storm",         effect: "3× luck server · 2 min" },
+    { label: "Blizzard",                effect: "slow combo decay · 2× boost" },
+    { label: "Titanic Arcane Void Cat", effect: "1 in 3,000,000,000 base" },
+    { label: "Combo breakpoints",       effect: "10 / 100 / 1,000+" },
+    { label: "Ultra Chest HP",          effect: "20,000,000,000" },
+  ],
+
+  checklist: {
+    anytime: [
+      "Claim all daily login + admin abuse drops",
+      "Push at least 1 Egg Luck upgrade",
+      "Hit a 1,000+ combo streak at least once",
+      "Hit every Ultra Chest you see (rally clan)",
+      "Be rolling when weather hits — storm or blizzard",
+    ],
+    days: [
+      { label: "Day 1",     items: [
+        "Explore Void RNG world, identify merchant + crafting + upgrade UI",
+        "Roll until first Egg Luck + Hatch Speed unlock",
+        "Confirm clan is registered in Angel Battle",
+      ]},
+      { label: "Days 2–3",  items: [
+        "Craft first Mega Lucky Dice II (save for storm)",
+        "Hit 100+ combo at least 3× (find rhythm that doesn't reset)",
+        "Equip best aura — visible flex helps recruit",
+      ]},
+      { label: "Days 4–5",  items: [
+        "All upgrades at tier 3+; bonus luck stacking every 10 rolls",
+        "Burn 1+ Mega II in a Lightning Storm window",
+        "Check clan rank, decide if you need to push individually",
+      ]},
+      { label: "Days 6–7 (push)", items: [
+        "Empty dice inventory across final storms",
+        "Track personal contribution rank — top-3 for rainbow titanic",
+        "Roll on autopilot anywhere you can — combo discipline only",
+        "Save crafted dice for the last Lightning Storm",
+      ]},
+    ],
+  },
+
+  pitfalls: [
+    "<b>Mega Lucky Dice II outside Lightning Storm</b> — you're throwing away ~3× value. Wait for the storm.",
+    "<b>Letting combo decay reset</b> — even a 30s walk-away tanks your luck floor. Roll on autopilot during chores.",
+    "<b>Solo grinding the Ultra Chest</b> — coordinate clan in voice/discord, kills come faster, weather triggers help everyone.",
+    "<b>Buying dice over crafting</b> — fuse spares with RNG Coins; merchant rates aren't great per the patch notes.",
+    "<b>Ignoring egg upgrades early</b> — they compound over the full 7 days; every hour late is luck you don't get back.",
+  ],
+};
+
+// =============================================================================
+// ALPHA CLAN INDEX — top 100 alpha clans (by Lifetime Diamonds), May 9 2026.
+// Used as the autocomplete source and the offline fallback if the live API
+// is blocked. Regenerate this every couple of months — see README.
+// =============================================================================
+const CLAN_INDEX = [{"n":"EXP","cc":"JP","m":73,"mc":75,"d":1506507830649,"p":0},{"n":"TAJC","cc":"QA","m":2,"mc":75,"d":1134800588413,"p":0},{"n":"V1LN","cc":"PL","m":57,"mc":75,"d":693501983166,"p":0},{"n":"dohw","cc":"US","m":20,"mc":75,"d":674701737482,"p":0},{"n":"x75p","cc":"US","m":0,"mc":75,"d":540453184363,"p":0},{"n":"SVSP","cc":"GB","m":36,"mc":75,"d":506727872467,"p":0},{"n":"K_TB","cc":"US","m":7,"mc":75,"d":382496229412,"p":0},{"n":"EDS1","cc":"US","m":74,"mc":75,"d":352377328582,"p":0},{"n":"st1z","cc":"GB","m":66,"mc":75,"d":336462796811,"p":0},{"n":"5984","cc":"US","m":1,"mc":9,"d":333952746752,"p":0},{"n":"goIf","cc":"US","m":51,"mc":75,"d":323387869510,"p":0},{"n":"LXCC","cc":"CH","m":57,"mc":75,"d":309172401153,"p":0},{"n":"JASC","cc":"CA","m":45,"mc":75,"d":286103898255,"p":0},{"n":"XPQX","cc":"US","m":72,"mc":75,"d":284945416949,"p":0},{"n":"SOPU","cc":"XK","m":74,"mc":75,"d":282285649416,"p":0},{"n":"M2P","cc":"GB","m":1,"mc":75,"d":273815730741,"p":0},{"n":"3zEZ","cc":"US","m":72,"mc":75,"d":255144454161,"p":0},{"n":"Taux","cc":"DE","m":65,"mc":75,"d":241309168990,"p":0},{"n":"SYX","cc":"NO","m":12,"mc":75,"d":227686478381,"p":0},{"n":"DRC","cc":"GB","m":58,"mc":75,"d":220334128269,"p":0},{"n":"o___","cc":"US","m":3,"mc":75,"d":209797617196,"p":0},{"n":"dgu","cc":"US","m":65,"mc":75,"d":196717634708,"p":0},{"n":"DGSL","cc":"US","m":70,"mc":75,"d":196421116215,"p":0},{"n":"IDF","cc":"SK","m":15,"mc":75,"d":188240525011,"p":0},{"n":"KOHV","cc":"PK","m":67,"mc":75,"d":182456963196,"p":0},{"n":"RAlN","cc":"US","m":0,"mc":75,"d":181965712287,"p":0},{"n":"fode","cc":"US","m":12,"mc":35,"d":179654561351,"p":0},{"n":"B3L1","cc":"US","m":57,"mc":75,"d":176251185173,"p":0},{"n":"st2z","cc":"US","m":73,"mc":75,"d":175476537500,"p":0},{"n":"NNVV","cc":"CA","m":62,"mc":75,"d":172307113096,"p":0},{"n":"MTS1","cc":"US","m":54,"mc":75,"d":170064291052,"p":0},{"n":"DLOW","cc":"NZ","m":68,"mc":75,"d":162548272298,"p":0},{"n":"XUXX","cc":"RU","m":9,"mc":75,"d":161079785054,"p":0},{"n":"FGZW","cc":"US","m":74,"mc":75,"d":148991612564,"p":0},{"n":"0RBI","cc":"US","m":74,"mc":75,"d":145964384326,"p":0},{"n":"rfrh","cc":"US","m":26,"mc":75,"d":143152331013,"p":0},{"n":"lFRA","cc":"FR","m":55,"mc":75,"d":138077335579,"p":0},{"n":"R0MU","cc":"FR","m":70,"mc":75,"d":137392147049,"p":0},{"n":"Ice6","cc":"US","m":71,"mc":75,"d":137364074255,"p":0},{"n":"3089","cc":"US","m":50,"mc":75,"d":136876589636,"p":0},{"n":"WS0W","cc":"GB","m":31,"mc":75,"d":127182514155,"p":0},{"n":"UN0","cc":"GB","m":74,"mc":75,"d":126758560417,"p":0},{"n":"XREX","cc":"PL","m":55,"mc":75,"d":125391861901,"p":0},{"n":"SMNI","cc":"US","m":47,"mc":75,"d":123501594241,"p":0},{"n":"DGWT","cc":"US","m":5,"mc":6,"d":120530900000,"p":0},{"n":"JJ07","cc":"DE","m":74,"mc":75,"d":119967780974,"p":0},{"n":"_M","cc":"NL","m":22,"mc":45,"d":117022935000,"p":0},{"n":"TFFL","cc":"CA","m":55,"mc":75,"d":114923803313,"p":0},{"n":"AR2Y","cc":"NP","m":71,"mc":75,"d":114712589689,"p":0},{"n":"DHFA","cc":"US","m":63,"mc":75,"d":109421483729,"p":0},{"n":"AJAR","cc":"US","m":1,"mc":75,"d":108955306134,"p":0},{"n":"3GM6","cc":"US","m":22,"mc":75,"d":108828223640,"p":0},{"n":"PH4N","cc":"US","m":24,"mc":75,"d":107962460920,"p":0},{"n":"Ml2K","cc":"GB","m":48,"mc":75,"d":106928957317,"p":0},{"n":"PPAJ","cc":"US","m":3,"mc":75,"d":105071627221,"p":0},{"n":"LRaq","cc":"US","m":30,"mc":75,"d":103565697002,"p":0},{"n":"L1GO","cc":"US","m":74,"mc":75,"d":102542401175,"p":0},{"n":"x1st","cc":"US","m":8,"mc":75,"d":101444890028,"p":0},{"n":"PHGQ","cc":"US","m":41,"mc":75,"d":100545522663,"p":0},{"n":"M__S","cc":"FR","m":29,"mc":75,"d":99030912500,"p":0},{"n":"H8ER","cc":"US","m":69,"mc":75,"d":98206037441,"p":0},{"n":"NS4R","cc":"GB","m":38,"mc":75,"d":95350374729,"p":0},{"n":"Go5s","cc":"PH","m":69,"mc":75,"d":94676645303,"p":0},{"n":"Gaea","cc":"NL","m":69,"mc":75,"d":93601854013,"p":0},{"n":"pgmf","cc":"US","m":68,"mc":75,"d":93259415593,"p":0},{"n":"EVOL","cc":"PT","m":57,"mc":75,"d":91882719882,"p":0},{"n":"LF4E","cc":"US","m":73,"mc":75,"d":90535898881,"p":0},{"n":"Raq","cc":"US","m":30,"mc":75,"d":89809625142,"p":0},{"n":"NZS","cc":"DE","m":70,"mc":75,"d":87480985065,"p":0},{"n":"Su__","cc":"US","m":1,"mc":75,"d":84729423844,"p":0},{"n":"BYRD","cc":"US","m":74,"mc":75,"d":83897797890,"p":0},{"n":"PTA","cc":"US","m":65,"mc":75,"d":82431054188,"p":0},{"n":"DV_","cc":"US","m":73,"mc":75,"d":82198886836,"p":0},{"n":"NPYT","cc":"AU","m":64,"mc":75,"d":80932869120,"p":0},{"n":"fiva","cc":"AE","m":7,"mc":40,"d":80863863993,"p":0},{"n":"PAAC","cc":"US","m":44,"mc":75,"d":80428407661,"p":0},{"n":"ZSIX","cc":"GB","m":61,"mc":75,"d":79525702068,"p":0},{"n":"RND2","cc":"US","m":38,"mc":75,"d":78639168064,"p":0},{"n":"GTE","cc":"US","m":27,"mc":75,"d":77204660774,"p":0},{"n":"IXO","cc":"DE","m":56,"mc":75,"d":76886469500,"p":0},{"n":"AX0C","cc":"DE","m":74,"mc":75,"d":74424108953,"p":0},{"n":"FFLH","cc":"US","m":57,"mc":75,"d":73260669777,"p":0},{"n":"CzPn","cc":"PL","m":2,"mc":46,"d":71440752000,"p":0},{"n":"OLLY","cc":"US","m":71,"mc":75,"d":70213775925,"p":0},{"n":"S7NS","cc":"GB","m":46,"mc":75,"d":69768035910,"p":0},{"n":"GSTG","cc":"US","m":74,"mc":75,"d":69399251818,"p":0},{"n":"HERD","cc":"US","m":25,"mc":75,"d":69259312631,"p":0},{"n":"BOSS","cc":"US","m":74,"mc":75,"d":68533692885,"p":0},{"n":"RXTS","cc":"US","m":21,"mc":75,"d":68468371499,"p":0},{"n":"GL","cc":"CZ","m":68,"mc":75,"d":68462643530,"p":0},{"n":"W2VY","cc":"CA","m":73,"mc":75,"d":68324034112,"p":0},{"n":"FNXX","cc":"BR","m":65,"mc":75,"d":68302749435,"p":0},{"n":"BMJ4","cc":"CA","m":49,"mc":75,"d":67579193124,"p":0},{"n":"NaKa","cc":"IL","m":15,"mc":75,"d":67166695500,"p":0},{"n":"TBEC","cc":"US","m":38,"mc":75,"d":66939649153,"p":0},{"n":"minx","cc":"GB","m":72,"mc":75,"d":66559143299,"p":0},{"n":"BOSK","cc":"AU","m":53,"mc":75,"d":64859033027,"p":0},{"n":"Oajo","cc":"GB","m":59,"mc":75,"d":64337998979,"p":0},{"n":"UNTY","cc":"GB","m":72,"mc":75,"d":64187946771,"p":0},{"n":"WSL","cc":"NZ","m":73,"mc":75,"d":62800857725,"p":0}].map(function(c){
+  return { Name:c.n, CountryCode:c.cc, Members:c.m, MemberCapacity:c.mc, DepositedDiamonds:c.d, Points:c.p };
+});
+
+// =============================================================================
+// PS99 API client — direct fetch() to ps99.biggamesapi.io. CORS is open
+// (`access-control-allow-origin: *`), so any origin works including file://.
+// API caches 60s server-side; we rate-limit to once every 30s.
+// =============================================================================
+const API = "https://ps99.biggamesapi.io/api/";
+
+async function apiGet(path) {
+  const r = await fetch(API + path, { headers: { Accept: "application/json" } });
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  const j = await r.json();
+  if (j.status !== "ok") throw new Error(j.error || "API error");
+  return j.data;
+}
+
+// =============================================================================
+// App
+// =============================================================================
+(function () {
+  const cfg = EVENT_CONFIG;
+
+  // ---------- apply branding ----------
+  document.documentElement.style.setProperty("--accent",     cfg.brand.accent);
+  document.documentElement.style.setProperty("--accent-2",   cfg.brand.accent2 || cfg.brand.accent);
+  document.documentElement.style.setProperty("--bg",         cfg.brand.bg || "#fff7ef");
+  document.documentElement.style.setProperty("--panel-2",    cfg.brand.panelTint || "#fff0e2");
+  document.title = cfg.brand.title;
+  document.getElementById("brand-mark").textContent = cfg.brand.initial || "K";
+  document.getElementById("title").textContent      = cfg.brand.title;
+  document.getElementById("subtitle").textContent   = cfg.brand.subtitle;
+  document.getElementById("contributor-note").textContent = cfg.contributorNote || "";
+  document.getElementById("footer").innerHTML =
+    'Source: <a href="' + cfg.event.sourceUrl + '" target="_blank" rel="noopener">BIG Games — Update ' + cfg.event.updateNumber + '</a> · ' +
+    'live data: <a href="https://ps99.biggamesapi.io" target="_blank" rel="noopener">ps99.biggamesapi.io</a> · cached 60s · ' +
+    'edit <code>EVENT_CONFIG</code> in <code>index.html</code> to adapt for next event';
+
+  // ---------- storage ----------
+  const KEY = "koiiTracker." + cfg.event.id;
+  const load = () => { try { return JSON.parse(localStorage.getItem(KEY) || "{}"); } catch { return {}; } };
+  const save = (s) => { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch {} };
+  const state = load();
+  state.checks   = state.checks   || {};
+  state.stats    = state.stats    || {};
+  state.lbMode   = state.lbMode   || "Points";
+  state.clanName = state.clanName || "";
+
+  // ---------- helpers ----------
+  const fmtNum = (n) => {
+    if (n == null) return "—";
+    if (Math.abs(n) >= 1e12) return (n/1e12).toFixed(2) + "T";
+    if (Math.abs(n) >= 1e9)  return (n/1e9).toFixed(2)  + "B";
+    if (Math.abs(n) >= 1e6)  return (n/1e6).toFixed(2)  + "M";
+    if (Math.abs(n) >= 1e3)  return (n/1e3).toFixed(1)  + "k";
+    return String(n);
+  };
+  const fmtFull = (n) => n == null ? "—" : Number(n).toLocaleString();
+  const flag = (cc) => {
+    if (!cc || cc.length !== 2) return "";
+    const a = 0x1F1E6;
+    return String.fromCodePoint(a + cc.toUpperCase().charCodeAt(0) - 65)
+         + String.fromCodePoint(a + cc.toUpperCase().charCodeAt(1) - 65);
+  };
+  const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+  const fmtRemaining = (ms) => {
+    if (ms <= 0) return "0d 00h 00m 00s";
+    let s = Math.floor(ms / 1000);
+    const d = Math.floor(s/86400); s -= d*86400;
+    const h = Math.floor(s/3600);  s -= h*3600;
+    const m = Math.floor(s/60);    s -= m*60;
+    return d + "d " + String(h).padStart(2,"0") + "h " + String(m).padStart(2,"0") + "m " + String(s).padStart(2,"0") + "s";
+  };
+  const projectPrize = (rank) => {
+    if (!rank || rank < 1) return "—";
+    const top = cfg.prizeTiers.filter(t => rank >= t.rankMin && rank <= t.rankMax);
+    if (top.length === 0) return "No reward";
+    return top.map(t => t.prize).join(" + ");
+  };
+
+  // ---------- render config-driven sections ----------
+  // strats
+  document.getElementById("strats-list").innerHTML = cfg.strats.map(s =>
+    `<li><div><h3>${escapeHtml(s.title)}</h3><p>${escapeHtml(s.body)}</p></div></li>`
+  ).join("");
+  // decision matrix
+  document.getElementById("matrix-list").innerHTML = cfg.decisionMatrix.map(m =>
+    `<div class="matrix-card"><div class="when">${escapeHtml(m.when)}</div><div class="what">${m.what}</div></div>`
+  ).join("");
+  // quick ref
+  document.getElementById("quickref-body").innerHTML = cfg.quickRef.map(q =>
+    `<tr><td>${escapeHtml(q.label)}</td><td class="right">${escapeHtml(q.effect)}</td></tr>`
+  ).join("");
+  // prize tiers
+  document.getElementById("prizes-body").innerHTML = cfg.prizeTiers.map(p => {
+    const pillCls = p.pillClass ? "pill " + p.pillClass : "pill";
+    const medal = p.pillClass ? p.pillClass.charAt(0).toUpperCase() + p.pillClass.slice(1) : "—";
+    return `<tr><td><span class="${pillCls}">${escapeHtml(p.rankLabel)}</span></td><td>${escapeHtml(p.prize)}</td><td>${medal}</td></tr>`;
+  }).join("");
+  // pitfalls
+  document.getElementById("pitfalls-list").innerHTML = cfg.pitfalls.map(p =>
+    `<li>${p}</li>`
+  ).join("");
+
+  // ---------- countdown banner ----------
+  const bannerEl    = document.getElementById("banner");
+  const bannerTitle = document.getElementById("banner-title");
+  const bannerMeta  = document.getElementById("banner-meta");
+  const dataStamp   = document.getElementById("data-stamp");
+  let liveBattle = null; // populated from /api/activeClanBattle
+  const eventStart = new Date(cfg.event.startDate).getTime();
+  const eventEnd   = new Date(cfg.event.endDate).getTime();
+
+  function paintBanner() {
+    const now = Date.now();
+    const inWindow = now >= eventStart && now < eventEnd;
+    const ended = now >= eventEnd;
+    const liveName = liveBattle && (liveBattle.title || liveBattle.configName) || "";
+    const matchesExpected = liveName.toLowerCase().includes((cfg.event.expectedBattleNameMatch || "").toLowerCase());
+    const apiLive = liveBattle && liveBattle.finishTime && now < liveBattle.finishTime * 1000;
+
+    bannerEl.classList.remove("live", "warn", "dim");
+    if (apiLive && matchesExpected) {
+      bannerEl.classList.add("live");
+      bannerTitle.textContent = "🔥 " + cfg.event.title + " — LIVE";
+      bannerMeta.textContent  = "Battle ends in " + fmtRemaining(liveBattle.finishTime * 1000 - now);
+    } else if (inWindow && apiLive) {
+      bannerEl.classList.add("warn");
+      bannerTitle.textContent = "⏳ Active battle: " + liveName;
+      bannerMeta.textContent  = "Expected battle hasn't propagated to API yet — banner will swap when it does. Battle ends in " + fmtRemaining(liveBattle.finishTime * 1000 - now);
+    } else if (inWindow) {
+      bannerEl.classList.add("warn");
+      bannerTitle.textContent = "⏳ " + cfg.event.title + " — event window open";
+      bannerMeta.textContent  = "Event ends in " + fmtRemaining(eventEnd - now) + ". Battle data not yet on API.";
+    } else if (ended) {
+      bannerEl.classList.add("dim");
+      bannerTitle.textContent = "Event ended · " + cfg.event.title;
+      bannerMeta.textContent  = "Update EVENT_CONFIG with the next event when it drops.";
+    } else {
+      bannerEl.classList.add("dim");
+      bannerTitle.textContent = cfg.event.title + " — pre-launch";
+      bannerMeta.textContent  = "Starts " + new Date(cfg.event.startDate).toLocaleString();
+    }
+  }
+  setInterval(paintBanner, 1000);
+
+  // ---------- leaderboard ----------
+  const lbBody = document.getElementById("lb-body");
+  const lbModeEl = document.getElementById("lb-mode");
+  const lbFootnote = document.getElementById("lb-footnote");
+  let topClans = CLAN_INDEX.slice();   // current dataset (live or fallback)
+  let dataIsLive = false;
+
+  function getSorted(mode, source) {
+    const arr = (source || topClans).slice();
+    if (mode === "DepositedDiamonds") {
+      arr.sort((a,b) => (b.DepositedDiamonds||0) - (a.DepositedDiamonds||0));
+    } else {
+      arr.sort((a,b) => {
+        const dp = (b.Points||0) - (a.Points||0);
+        return dp !== 0 ? dp : (b.DepositedDiamonds||0) - (a.DepositedDiamonds||0);
+      });
+    }
+    return arr;
+  }
+
+  function renderLeaderboard() {
+    const mode = state.lbMode;
+    const rows = getSorted(mode).slice(0, 20);
+    [...lbModeEl.querySelectorAll("button")].forEach(b =>
+      b.classList.toggle("active", b.dataset.mode === mode)
+    );
+    let html = "";
+    const allZero = mode === "Points" && rows.every(c => !c.Points);
+    if (allZero) {
+      html += '<tr><td colspan="4" class="empty" style="background:#fff4e2;color:#6f3a06;">All Battle Points = 0 · battle hasn\'t started or just ended. Switch to Lifetime Diamonds to see the alpha clans.</td></tr>';
+    }
+    const me = (state.clanName || "").trim().toLowerCase();
+    rows.forEach((c,i) => {
+      const isMe = me && c.Name && c.Name.toLowerCase() === me;
+      const score = mode === "DepositedDiamonds" ? c.DepositedDiamonds : c.Points;
+      html += '<tr' + (isMe ? ' class="me"' : '') + '>'
+            + '<td class="rank right">' + (i+1) + '</td>'
+            + '<td><span class="country">' + flag(c.CountryCode) + '</span>' + escapeHtml(c.Name||"?") + '</td>'
+            + '<td class="right" title="' + fmtFull(score) + '">' + fmtNum(score||0) + '</td>'
+            + '<td class="right">' + (c.Members||0) + '/' + (c.MemberCapacity||0) + '</td></tr>';
+    });
+    lbBody.innerHTML = html;
+    lbFootnote.textContent = dataIsLive
+      ? "Live · top 100 from BIG Games API"
+      : "Snapshot · " + topClans.length + " alpha clans cached locally";
+  }
+  lbModeEl.addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    state.lbMode = b.dataset.mode; save(state);
+    renderLeaderboard();
+  });
+
+  // ---------- clan lookup ----------
+  const clanCard = document.getElementById("clan-card");
+  const clanNameInput = document.getElementById("clan-name");
+  const clanList = document.getElementById("clan-list");
+
+  // Auto-pick default clan on first load
+  if (!state.clanName && cfg.myClans && cfg.myClans.length > 0) {
+    state.clanName = cfg.myClans[0].name;
+    save(state);
+  }
+  clanNameInput.value = state.clanName || "";
+
+  // Quick-switch pills for myClans
+  const myClanPills = document.getElementById("myclan-pills");
+  function renderMyClanPills() {
+    if (!cfg.myClans || cfg.myClans.length === 0) {
+      myClanPills.style.display = "none";
+      return;
+    }
+    myClanPills.innerHTML = cfg.myClans.map(c => {
+      const isActive = state.clanName && state.clanName.toLowerCase() === c.name.toLowerCase();
+      const cls = isActive ? "pill accent" : "pill";
+      const note = c.note ? ' <span style="opacity:0.75; font-weight:400;">· ' + escapeHtml(c.note) + '</span>' : '';
+      return '<button data-clan="' + escapeHtml(c.name) + '" class="' + cls + '" style="border:none; cursor:pointer; font: inherit;">' + escapeHtml(c.label || c.name) + note + '</button>';
+    }).join("");
+  }
+  myClanPills.addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-clan]");
+    if (!b) return;
+    clanNameInput.value = b.dataset.clan;
+    state.clanName = b.dataset.clan;
+    save(state);
+    renderMyClanPills();
+    lookupClan();
+  });
+  renderMyClanPills();
+
+  CLAN_INDEX.forEach(c => {
+    const o = document.createElement("option");
+    o.value = c.Name;
+    clanList.appendChild(o);
+  });
+  document.getElementById("clan-fetch").addEventListener("click", lookupClan);
+  clanNameInput.addEventListener("keydown", (e) => { if (e.key === "Enter") lookupClan(); });
+
+  function findInIndex(query) {
+    const q = query.trim().toLowerCase();
+    if (!q) return null;
+    const exact = topClans.find(c => c.Name && c.Name.toLowerCase() === q);
+    if (exact) return { match: exact, kind: "exact" };
+    const starts = topClans.find(c => c.Name && c.Name.toLowerCase().startsWith(q));
+    if (starts) return { match: starts, kind: "prefix" };
+    const sub = topClans.find(c => c.Name && c.Name.toLowerCase().includes(q));
+    if (sub) return { match: sub, kind: "substring" };
+    return null;
+  }
+
+  async function lookupClan() {
+    const name = clanNameInput.value.trim();
+    if (!name) { clanCard.innerHTML = '<div class="empty">Enter a clan name first.</div>'; return; }
+    state.clanName = name; save(state);
+    clanCard.innerHTML = '<div class="empty">Looking up live…</div>';
+    renderLeaderboard();
+    renderMyClanPills();
+
+    let live = null;
+    try {
+      live = await apiGet("clan/" + encodeURIComponent(name));
+    } catch (e) {
+      // fall through to snapshot
+    }
+
+    let card;
+    if (live) {
+      const sortedByPoints = getSorted("Points");
+      const sortedByDD     = getSorted("DepositedDiamonds");
+      const pointsIdx = sortedByPoints.findIndex(x => x.Name && x.Name.toLowerCase() === (live.Name||"").toLowerCase());
+      const ddIdx     = sortedByDD.findIndex(x => x.Name && x.Name.toLowerCase() === (live.Name||"").toLowerCase());
+      const pointsRank = pointsIdx >= 0 ? "#" + (pointsIdx+1) + " (top 20 view)" : "outside top 20";
+      const ddRank     = ddIdx >= 0 ? "#" + (ddIdx+1) : "—";
+
+      const contribRows = (live.Contribution && live.Contribution.Battle) || [];
+      const contribSorted = contribRows.slice().sort((a,b) => (b.Points||0) - (a.Points||0));
+      let contribHtml;
+      if (contribSorted.length === 0) {
+        contribHtml = '<div class="sub" style="margin-top:8px;">No active contribution data — battle not running for this clan yet.</div>';
+      } else {
+        contribHtml = '<table style="margin-top:8px;"><thead><tr><th class="right">#</th><th>UserID</th><th class="right">Points</th></tr></thead><tbody>'
+          + contribSorted.slice(0,10).map((r,i) => {
+              const cls = i===0 ? 'pill gold' : (i<3 ? 'pill silver' : (i<10 ? 'pill bronze' : 'pill'));
+              const lbl = i===0 ? 'Rainbow' : (i<3 ? 'Rainbow' : (i<10 ? 'Golden' : 'Std'));
+              return '<tr><td class="right rank">'+(i+1)+'</td><td>'+r.UserID+'</td><td class="right">'+fmtNum(r.Points)+' <span class="'+cls+'">'+lbl+'</span></td></tr>';
+            }).join("")
+          + '</tbody></table>';
+      }
+
+      card =
+        '<div class="row" style="margin-bottom:10px; gap:6px;">'
+          + '<span class="pill accent">' + escapeHtml(live.Name||name) + '</span>'
+          + '<span class="pill">' + flag(live.CountryCode) + ' ' + (live.CountryCode||"—") + '</span>'
+          + '<span class="pill good">live</span>'
+        + '</div>'
+        + (live.Desc ? '<div class="sub" style="margin-top:-4px;">"' + escapeHtml(live.Desc) + '"</div>' : '')
+        + '<div class="stat-row" style="margin: 12px 0;">'
+          + '<div class="stat">' + (live.GuildLevel||"—") + '<small>Guild Lvl</small></div>'
+          + '<div class="stat">' + (Array.isArray(live.Members) ? live.Members.length : (live.Members||0)) + '/' + (live.MemberCapacity||75) + '<small>Members</small></div>'
+          + '<div class="stat" style="color:var(--gold);">' + (live.GoldMedals||0) + '<small>Gold</small></div>'
+          + '<div class="stat" style="color:var(--silver);">' + (live.SilverMedals||0) + '<small>Silver</small></div>'
+          + '<div class="stat" style="color:var(--bronze);">' + (live.BronzeMedals||0) + '<small>Bronze</small></div>'
+        + '</div>'
+        + '<div class="row" style="gap:6px;">'
+          + '<span class="pill">Battle rank: ' + pointsRank + '</span>'
+          + '<span class="pill">DD rank: ' + ddRank + '</span>'
+          + '<span class="pill">Diamonds: ' + fmtNum(live.DepositedDiamonds) + '</span>'
+        + '</div>'
+        + '<h3 style="margin-top:12px;">Top contributors (this battle)</h3>'
+        + contribHtml;
+    } else {
+      // fallback to embedded index
+      const hit = findInIndex(name);
+      if (!hit) {
+        const q = name.toLowerCase();
+        const suggestions = topClans
+          .filter(c => c.Name && c.Name.toLowerCase().includes(q[0]||""))
+          .slice(0,6)
+          .map(c => '<span class="pill">' + escapeHtml(c.Name) + '</span>')
+          .join(" ");
+        card =
+          '<div class="empty" style="color: var(--warn); text-align: left;">'
+            + '<b>"' + escapeHtml(name) + '"</b> couldn\'t be reached on the live API and isn\'t in the embedded snapshot.'
+            + '<div class="sub" style="margin: 8px 0;">Check spelling — clan names are case-insensitive in this lookup.</div>'
+            + (suggestions ? '<div class="sub">Did you mean: ' + suggestions + '</div>' : '')
+          + '</div>';
+      } else {
+        const c = hit.match;
+        const sortedByPoints = getSorted("Points");
+        const sortedByDD     = getSorted("DepositedDiamonds");
+        const pointsRank = sortedByPoints.findIndex(x => x.Name === c.Name) + 1;
+        const ddRank     = sortedByDD.findIndex(x => x.Name === c.Name) + 1;
+        const matchTag = hit.kind === "exact"
+          ? '<span class="pill warn">snapshot</span>'
+          : '<span class="pill warn">snapshot · ' + hit.kind + ' match</span>';
+        card =
+          '<div class="row" style="margin-bottom:10px; gap:6px;">'
+            + '<span class="pill accent">' + escapeHtml(c.Name) + '</span>'
+            + '<span class="pill">' + flag(c.CountryCode) + ' ' + (c.CountryCode||"—") + '</span>'
+            + matchTag
+          + '</div>'
+          + '<div class="stat-row" style="margin-bottom: 12px;">'
+            + '<div class="stat">' + (c.Members||0) + '/' + (c.MemberCapacity||75) + '<small>Members</small></div>'
+            + '<div class="stat">#' + pointsRank + '<small>Points rank</small></div>'
+            + '<div class="stat">#' + ddRank + '<small>Diamonds rank</small></div>'
+          + '</div>'
+          + '<table>'
+            + '<thead><tr><th>Metric</th><th class="right">Value</th></tr></thead>'
+            + '<tbody>'
+              + '<tr><td>Battle Points</td><td class="right" title="' + fmtFull(c.Points) + '">' + fmtNum(c.Points) + '</td></tr>'
+              + '<tr><td>Lifetime Diamonds</td><td class="right" title="' + fmtFull(c.DepositedDiamonds) + '">' + fmtNum(c.DepositedDiamonds) + '</td></tr>'
+              + '<tr><td>Projected prize</td><td class="right">' + projectPrize(pointsRank) + '</td></tr>'
+            + '</tbody>'
+          + '</table>'
+          + '<div class="sub" style="margin-top: 10px;">Live API didn\'t respond — showing snapshot data. Click Refresh live to retry.</div>';
+      }
+    }
+    clanCard.innerHTML = card;
+  }
+
+  // ---------- live refresh ----------
+  let lastRefresh = 0;
+  const refreshBtn = document.getElementById("refresh-btn");
+  refreshBtn.addEventListener("click", () => refreshAll(true));
+
+  async function refreshAll(userInitiated) {
+    const now = Date.now();
+    if (!userInitiated && now - lastRefresh < 30000) return;
+    lastRefresh = now;
+    refreshBtn.disabled = true;
+    refreshBtn.textContent = "Refreshing…";
+    let okBattle = false, okClans = false;
+
+    try {
+      const bd = await apiGet("activeClanBattle");
+      liveBattle = {
+        configName: bd.configName,
+        title: (bd.configData && bd.configData.Title) || bd.configName,
+        startTime: bd.configData && bd.configData.StartTime,
+        finishTime: bd.configData && bd.configData.FinishTime,
+      };
+      okBattle = true;
+    } catch (e) { /* keep snapshot */ }
+
+    try {
+      const data = await apiGet("clans?page=1&pageSize=100&sort=Points&sortOrder=desc");
+      topClans = data;
+      dataIsLive = true;
+      okClans = true;
+    } catch (e) {
+      try {
+        const data2 = await apiGet("clans?page=1&pageSize=100&sort=DepositedDiamonds&sortOrder=desc");
+        topClans = data2;
+        dataIsLive = true;
+        okClans = true;
+      } catch (e2) {
+        dataIsLive = false;
+        topClans = CLAN_INDEX.slice();
+      }
+    }
+
+    paintBanner();
+    renderLeaderboard();
+    if (state.clanName) await lookupClan();
+    const stamp = new Date().toLocaleTimeString();
+    dataStamp.textContent = okBattle && okClans
+      ? "Live · " + stamp
+      : (okClans ? "Live (clans only) · " + stamp : "Snapshot · live blocked (" + stamp + ")");
+    refreshBtn.disabled = false;
+    refreshBtn.textContent = "Refresh live";
+  }
+
+  // ---------- daily checklist ----------
+  const tabs = document.getElementById("day-tabs");
+  const panels = document.getElementById("day-panels");
+  const DAYS = [{ id:"any", label:"Anytime", items: cfg.checklist.anytime }]
+    .concat(cfg.checklist.days.map((d,i) => ({ id: "d"+i, label: d.label, items: d.items })));
+  DAYS.forEach((d, i) => {
+    const b = document.createElement("button");
+    b.className = "day-tab" + (i === 0 ? " active" : "");
+    b.textContent = d.label;
+    b.dataset.day = d.id;
+    tabs.appendChild(b);
+    const p = document.createElement("div");
+    p.id = "panel-" + d.id;
+    p.className = "panel-day" + (i === 0 ? "" : " hidden");
+    d.items.forEach((t, j) => {
+      const key = d.id + "-" + j;
+      const done = !!state.checks[key];
+      const lbl = document.createElement("label");
+      lbl.className = "check" + (done ? " done" : "");
+      lbl.innerHTML = '<input type="checkbox" ' + (done ? "checked" : "") + ' /><span><span class="label">' + escapeHtml(t) + '</span></span>';
+      const cb = lbl.querySelector("input");
+      cb.addEventListener("change", () => {
+        state.checks[key] = cb.checked;
+        lbl.classList.toggle("done", cb.checked);
+        save(state);
+      });
+      p.appendChild(lbl);
+    });
+    panels.appendChild(p);
+  });
+  tabs.addEventListener("click", (e) => {
+    const b = e.target.closest("button.day-tab");
+    if (!b) return;
+    [...tabs.querySelectorAll(".day-tab")].forEach(x => x.classList.remove("active"));
+    b.classList.add("active");
+    [...panels.querySelectorAll(".panel-day")].forEach(x => x.classList.add("hidden"));
+    document.getElementById("panel-" + b.dataset.day).classList.remove("hidden");
+  });
+
+  // ---------- personal stats ----------
+  ["rolls","combo"].forEach(f => {
+    const el = document.getElementById("in-"+f);
+    if (state.stats[f] != null) el.value = state.stats[f];
+    el.addEventListener("input", () => {
+      state.stats[f] = el.value; save(state); renderStats();
+    });
+  });
+  function renderStats() {
+    const r = parseInt(state.stats.rolls||0,10)||0;
+    const c = parseInt(state.stats.combo||0,10)||0;
+    document.getElementById("stat-rolls").firstChild.nodeValue = r.toLocaleString();
+    document.getElementById("stat-combo").firstChild.nodeValue = c.toLocaleString();
+  }
+  renderStats();
+
+  // ---------- resets ----------
+  document.getElementById("reset-checks").addEventListener("click", () => {
+    state.checks = {}; save(state);
+    [...panels.querySelectorAll(".check input")].forEach(cb => {
+      cb.checked = false; cb.parentElement.classList.remove("done");
+    });
+  });
+  document.getElementById("reset-stats").addEventListener("click", () => {
+    state.stats = {}; save(state);
+    ["rolls","combo"].forEach(f => document.getElementById("in-"+f).value = "");
+    renderStats();
+  });
+
+  // ---------- boot ----------
+  paintBanner();
+  renderLeaderboard();
+  if (state.clanName) lookupClan();
+  refreshAll(false);
+})();
+</script>
+</body>
+</html>
