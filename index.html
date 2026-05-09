@@ -289,6 +289,22 @@
     </div>
   </header>
 
+  <!-- ALSO FROM THIS BUILDER — RORORO on Microsoft Store -->
+  <section style="margin-bottom: 14px;">
+    <a href="https://apps.microsoft.com/detail/9NMJCS390KWB?hl=en-us&gl=US&ocid=pdpshare"
+       target="_blank" rel="noopener"
+       style="display: flex; align-items: center; justify-content: space-between; gap: 10px;
+              padding: 10px 14px; background: var(--panel); border: 1px solid var(--line);
+              border-radius: 12px; text-decoration: none; color: var(--ink);
+              box-shadow: var(--shadow);">
+      <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+        <span class="pill accent" style="font-size: 11px;">From this builder</span>
+        <span><b>RORORO</b> — Roblox favorites + quick-switch for Windows</span>
+      </div>
+      <span style="color: var(--accent); font-weight: 600; white-space: nowrap;">Get on Microsoft Store →</span>
+    </a>
+  </section>
+
   <!-- LIVE STATUS BANNER -->
   <section class="panel" style="margin-bottom: 14px;">
     <div id="banner" class="banner dim">
@@ -337,20 +353,11 @@
     </div>
   </section>
 
-  <!-- PRIORITY STRATS + DAILY CHECKLIST -->
-  <section class="grid cols-2" style="margin-bottom: 14px;">
+  <!-- PRIORITY STRATS (full width) -->
+  <section style="margin-bottom: 14px;">
     <div class="panel">
       <h2 id="strats-heading">Priority strat — what wins</h2>
       <ol class="strats" id="strats-list"></ol>
-    </div>
-
-    <div class="panel">
-      <h2>Daily checklist</h2>
-      <div class="day-tabs" id="day-tabs"></div>
-      <div id="day-panels"></div>
-      <div class="row" style="margin-top: 8px; justify-content: flex-end;">
-        <button class="reset" id="reset-checks">Reset all checks</button>
-      </div>
     </div>
   </section>
 
@@ -522,39 +529,6 @@ const EVENT_CONFIG = {
     { label: "Combo breakpoints",       effect: "10 / 100 / 1,000+" },
     { label: "Ultra Chest HP",          effect: "20,000,000,000" },
   ],
-
-  checklist: {
-    anytime: [
-      "Claim all daily login + admin abuse drops",
-      "Push at least 1 Egg Luck upgrade",
-      "Hit a 1,000+ combo streak at least once",
-      "Hit every Ultra Chest you see (rally clan)",
-      "Be rolling when weather hits — storm or blizzard",
-    ],
-    days: [
-      { label: "Day 1",     items: [
-        "Explore Void RNG world, identify merchant + crafting + upgrade UI",
-        "Roll until first Egg Luck + Hatch Speed unlock",
-        "Confirm clan is registered in Angel Battle",
-      ]},
-      { label: "Days 2–3",  items: [
-        "Craft first Mega Lucky Dice II (save for storm)",
-        "Hit 100+ combo at least 3× (find rhythm that doesn't reset)",
-        "Equip best aura — visible flex helps recruit",
-      ]},
-      { label: "Days 4–5",  items: [
-        "All upgrades at tier 3+; bonus luck stacking every 10 rolls",
-        "Burn 1+ Mega II in a Lightning Storm window",
-        "Check clan rank, decide if you need to push individually",
-      ]},
-      { label: "Days 6–7 (push)", items: [
-        "Empty dice inventory across final storms",
-        "Track personal contribution rank — top-3 for rainbow titanic",
-        "Roll on autopilot anywhere you can — combo discipline only",
-        "Save crafted dice for the last Lightning Storm",
-      ]},
-    ],
-  },
 
   pitfalls: [
     "<b>Roll-spam without Huge Luck unlocked</b> — points scale with hatch rarity, not roll count. Dust hatches feed RNG Coins, not Battle Points. Get Huge Luck unlocked before going volume.",
@@ -1064,45 +1038,6 @@ async function apiGet(path) {
     refreshBtn.textContent = "Refresh live";
   }
 
-  // ---------- daily checklist ----------
-  const tabs = document.getElementById("day-tabs");
-  const panels = document.getElementById("day-panels");
-  const DAYS = [{ id:"any", label:"Anytime", items: cfg.checklist.anytime }]
-    .concat(cfg.checklist.days.map((d,i) => ({ id: "d"+i, label: d.label, items: d.items })));
-  DAYS.forEach((d, i) => {
-    const b = document.createElement("button");
-    b.className = "day-tab" + (i === 0 ? " active" : "");
-    b.textContent = d.label;
-    b.dataset.day = d.id;
-    tabs.appendChild(b);
-    const p = document.createElement("div");
-    p.id = "panel-" + d.id;
-    p.className = "panel-day" + (i === 0 ? "" : " hidden");
-    d.items.forEach((t, j) => {
-      const key = d.id + "-" + j;
-      const done = !!state.checks[key];
-      const lbl = document.createElement("label");
-      lbl.className = "check" + (done ? " done" : "");
-      lbl.innerHTML = '<input type="checkbox" ' + (done ? "checked" : "") + ' /><span><span class="label">' + escapeHtml(t) + '</span></span>';
-      const cb = lbl.querySelector("input");
-      cb.addEventListener("change", () => {
-        state.checks[key] = cb.checked;
-        lbl.classList.toggle("done", cb.checked);
-        save(state);
-      });
-      p.appendChild(lbl);
-    });
-    panels.appendChild(p);
-  });
-  tabs.addEventListener("click", (e) => {
-    const b = e.target.closest("button.day-tab");
-    if (!b) return;
-    [...tabs.querySelectorAll(".day-tab")].forEach(x => x.classList.remove("active"));
-    b.classList.add("active");
-    [...panels.querySelectorAll(".panel-day")].forEach(x => x.classList.add("hidden"));
-    document.getElementById("panel-" + b.dataset.day).classList.remove("hidden");
-  });
-
   // ---------- personal stats ----------
   ["rolls","combo"].forEach(f => {
     const el = document.getElementById("in-"+f);
@@ -1120,12 +1055,6 @@ async function apiGet(path) {
   renderStats();
 
   // ---------- resets ----------
-  document.getElementById("reset-checks").addEventListener("click", () => {
-    state.checks = {}; save(state);
-    [...panels.querySelectorAll(".check input")].forEach(cb => {
-      cb.checked = false; cb.parentElement.classList.remove("done");
-    });
-  });
   document.getElementById("reset-stats").addEventListener("click", () => {
     state.stats = {}; save(state);
     ["rolls","combo"].forEach(f => document.getElementById("in-"+f).value = "");
