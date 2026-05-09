@@ -592,12 +592,27 @@ async function apiGet(path) {
   }
   function applyTheme(id) {
     const t = getTheme(id);
+    const root = document.documentElement;
     if (t.id === defaultThemeId) {
-      document.documentElement.removeAttribute("data-theme");
+      root.removeAttribute("data-theme");
+      // Re-apply EVENT_CONFIG.brand overrides for the default Koii theme.
+      // These are inline styles — they outrank CSS rules, so we always
+      // clear them for non-default themes (else dark themes inherit a
+      // stuck cream bg from a prior session on default).
+      root.style.setProperty("--accent",   cfg.brand.accent);
+      root.style.setProperty("--accent-2", cfg.brand.accent2 || cfg.brand.accent);
+      root.style.setProperty("--bg",       cfg.brand.bg || "#fff7ef");
+      root.style.setProperty("--panel-2",  cfg.brand.panelTint || "#fff0e2");
     } else {
-      document.documentElement.setAttribute("data-theme", t.id);
+      root.setAttribute("data-theme", t.id);
+      // Clear the Koii brand inline overrides so the named theme's
+      // [data-theme="<id>"] CSS rule actually wins.
+      root.style.removeProperty("--accent");
+      root.style.removeProperty("--accent-2");
+      root.style.removeProperty("--bg");
+      root.style.removeProperty("--panel-2");
     }
-    document.documentElement.classList.toggle("dark", t.mode === "dark");
+    root.classList.toggle("dark", t.mode === "dark");
     try { localStorage.setItem(THEME_KEY, t.id); } catch {}
     return t;
   }
@@ -614,15 +629,9 @@ async function apiGet(path) {
   themePicker.addEventListener("change", () => applyTheme(themePicker.value));
 
   // ---------- apply branding ----------
-  // Brand color overrides only apply on the default theme — named themes
-  // own their own palette and shouldn't be repainted by event branding.
+  // Color tokens are now handled by applyTheme() above — this block only
+  // sets text/title content that's theme-independent.
   document.title = cfg.brand.title;
-  if (initialThemeId === defaultThemeId) {
-    document.documentElement.style.setProperty("--accent",   cfg.brand.accent);
-    document.documentElement.style.setProperty("--accent-2", cfg.brand.accent2 || cfg.brand.accent);
-    document.documentElement.style.setProperty("--bg",       cfg.brand.bg || "#fff7ef");
-    document.documentElement.style.setProperty("--panel-2",  cfg.brand.panelTint || "#fff0e2");
-  }
   document.getElementById("brand-mark").textContent = cfg.brand.initial || "K";
   document.getElementById("title").textContent      = cfg.brand.title;
   document.getElementById("subtitle").textContent   = cfg.brand.subtitle;
@@ -901,7 +910,17 @@ async function apiGet(path) {
         // Surface the actual response shape for debugging — only fires
         // when contribution data is missing so it doesn't spam the console.
         try { console.warn("Koii Tracker: no contribution rows for", live.Name, "— top-level keys:", Object.keys(live)); } catch {}
-        contribHtml = '<div class="sub" style="margin-top:8px;">No active contribution data — either the battle just turned over and points haven\'t logged, or the API field path moved. Open devtools console for response keys.</div>';
+        const petsim99Url = "https://www.petsim99.co/clan/" + encodeURIComponent(live.Name || name);
+        contribHtml =
+          '<div class="sub" style="margin-top:8px;">Per-member contribution data isn\'t exposed on the BIG Games public API — community trackers like petsim99.co aggregate it from Roblox directly.</div>' +
+          '<div style="margin-top:10px;">' +
+            '<a href="' + petsim99Url + '" target="_blank" rel="noopener" ' +
+              'style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; ' +
+                     'background: var(--accent); color: var(--bg); border-radius: 8px; ' +
+                     'text-decoration: none; font-weight: 600; font-size: 13px;">' +
+              'View ' + escapeHtml(live.Name || name) + ' on petsim99.co →' +
+            '</a>' +
+          '</div>';
       } else {
         contribHtml = '<table style="margin-top:8px;"><thead><tr><th class="right">#</th><th>UserID</th><th class="right">Points</th></tr></thead><tbody>'
           + contribSorted.slice(0,10).map((r,i) => {
